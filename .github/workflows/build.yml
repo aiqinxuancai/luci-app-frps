@@ -7,37 +7,49 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up OpenWrt build environment
-        uses: openwrt/setup-openwrt@v1
+        uses: actions/checkout@v4
         with:
-          openwrt-version: '21.02'
+          path: luci-app-frps2
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext \
+          git gnutls-dev libgcrypt20-dev libssl-dev python3-distutils rsync \
+          subversion swig time unzip wget zlib1g-dev
+
+      - name: Clone OpenWrt source
+        run: git clone https://github.com/openwrt/openwrt.git -b openwrt-21.02 --single-branch openwrt
 
       - name: Update feeds
+        working-directory: ./openwrt
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Copy package to feeds
-        run: |
-          mkdir -p feeds/luci/applications/luci-app-frps2
-          cp -r ./* feeds/luci/applications/luci-app-frps2/
+        run: cp -r ./luci-app-frps2 ./openwrt/package/feeds/luci/luci-app-frps2
 
       - name: Configure build
+        working-directory: ./openwrt
         run: |
+          make defconfig
           echo "CONFIG_PACKAGE_luci-app-frps2=y" >> .config
+          echo "CONFIG_PACKAGE_frps=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_jsonfilter=y" >> .config
           make defconfig
 
       - name: Compile package
+        working-directory: ./openwrt
         run: make package/luci-app-frps2/compile V=s
 
       - name: Upload IPK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: luci-app-frps2-ipk
-          path: bin/packages/*/luci/luci-app-frps2_*.ipk
+          path: openwrt/bin/packages/*/luci/luci-app-frps2_*.ipk
