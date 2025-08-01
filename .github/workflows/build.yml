@@ -70,33 +70,46 @@ jobs:
         run: |
           cd "$CACHE_DIR_SDK"
           SDK_FILE_SHA_URL="$SDK_URL_PATH/sha256sums"
-          SDK_FILE_SHA_STR=$(wget -q -O - "$SDK_FILE_SHA_URL" | grep "${SDK_NAME}" | grep ".tar.xz")
-          if [ -z "$SDK_FILE_SHA_STR" ]; then
-            echo "::error::Cannot find SDK file in sha256sums."
+          
+          # Fetch the sha256sums file and filter for the specific SDK tarball
+          if ! wget -q -O - "$SDK_FILE_SHA_URL" | grep "${SDK_NAME}" | grep ".tar.xz" > sha256sums.small; then
+            echo "::error::Failed to fetch or find SDK info in sha256sums."
             exit 1
           fi
-          SDK_FILE=$(echo "$SDK_FILE_SHA_STR" | awk '{print $2}' | sed 's/\*//')
-          SDK_SHA256=$(echo "$SDK_FILE_SHA_STR" | awk '{print $1}')
+          if [ ! -s sha256sums.small ]; then
+            echo "::error::Cannot find SDK file for '${SDK_NAME}' in sha256sums."
+            exit 1
+          fi
+
+          # Extract filename and hash
+          SDK_FILE=$(awk '{print $2}' sha256sums.small | sed 's/^\*//')
+          SDK_SHA256=$(awk '{print $1}' sha256sums.small)
           
+          # Recreate the small sha file with the correct format
           echo "$SDK_SHA256  $SDK_FILE" > sha256sums.small
-          
+
+          # Check if file exists and is valid, otherwise download
           if ! sha256sum -c sha256sums.small >/dev/null 2>&1; then
             wget -q -O "$SDK_FILE" "$SDK_URL_PATH/$SDK_FILE"
             if ! sha256sum -c sha256sums.small >/dev/null 2>&1; then
-              echo "::error::SDK can not be verified!"
+              echo "::error::SDK could not be verified!"
               exit 1
             fi
           fi
           
           cd -
+          echo "--- SDK file info ---"
           file "$CACHE_DIR_SDK/$SDK_FILE"
+          echo "---------------------"
+
+          # Extract the SDK
           7z x "$CACHE_DIR_SDK/$SDK_FILE" -so | tar -C "$SDK_HOME" -xvf - --strip-components=1
           
+          # Setup SDK symlinks and feeds
           cd "$SDK_HOME"
-          test -d "dl" && rm -rf "dl" || true
-          test -d "feeds" && rm -rf "feeds" || true
-          ln -s "$CACHE_DIR_DL" "dl"
-          ln -s "$CACHE_DIR_FEEDS" "feeds"
+          rm -rf dl feeds
+          ln -s "$CACHE_DIR_DL" dl
+          ln -s "$CACHE_DIR_FEEDS" feeds
           cp feeds.conf.default feeds.conf
           sed -i 's#git.openwrt.org/openwrt/openwrt#github.com/openwrt/openwrt#' feeds.conf
           sed -i 's#git.openwrt.org/feed/packages#github.com/openwrt/packages#' feeds.conf
