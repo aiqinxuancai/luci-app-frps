@@ -59,10 +59,11 @@ jobs:
 
       - name: Create Directories
         run: |
-          mkdir -p ${{ env.CACHE_DIR }}/{sdk,dl,feeds}
-          echo "CACHE_DIR_SDK=${{ env.CACHE_DIR }}/sdk" >> $GITHUB_ENV
-          echo "CACHE_DIR_DL=${{ env.CACHE_DIR }}/dl" >> $GITHUB_ENV
-          echo "CACHE_DIR_FEEDS=${{ env.CACHE_DIR }}/feeds" >> $GITHUB_ENV
+          EVAL_CACHE_DIR=$(eval echo ${{ env.CACHE_DIR }})
+          mkdir -p $EVAL_CACHE_DIR/{sdk,dl,feeds}
+          echo "CACHE_DIR_SDK=$EVAL_CACHE_DIR/sdk" >> $GITHUB_ENV
+          echo "CACHE_DIR_DL=$EVAL_CACHE_DIR/dl" >> $GITHUB_ENV
+          echo "CACHE_DIR_FEEDS=$EVAL_CACHE_DIR/feeds" >> $GITHUB_ENV
           echo "SDK_HOME=$(mktemp -d)" >> $GITHUB_ENV
 
       - name: Download and Unzip SDK
