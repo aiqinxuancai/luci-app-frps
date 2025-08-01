@@ -1,55 +1,131 @@
-name: Build IPK
+name: Build and Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*.*.*"
+  workflow_dispatch:
+
+env:
+  PACKAGE_NAME: luci-app-frps2
+  CACHE_DIR: ~/cache
 
 jobs:
-  build:
+  release:
+    name: Build for ${{ matrix.arch }}
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/x86/64
+            sdk_name: openwrt-sdk-23.05.5-x86-64
+          - arch: aarch64_cortex-a53
+            sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/aarch64/cortex-a53
+            sdk_name: openwrt-sdk-23.05.5-aarch64-cortex-a53
+          - arch: mipsel_24kc
+            sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7621
+            sdk_name: openwrt-sdk-23.05.5-ramips-mt7621
+
+    env:
+      SDK_URL_PATH: ${{ matrix.sdk_url_path }}
+      SDK_NAME: ${{ matrix.sdk_name }}
+      CCACHE_DIR: ~/.ccache
+      CONFIG_CCACHE: y
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          path: luci-app-frps2
 
-      - name: Install build dependencies
+      - name: Prepare Cache Key
+        id: cache_key
+        run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Setup Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CACHE_DIR }}
+            ${{ env.CCACHE_DIR }}
+          key: openwrt-${{ matrix.arch }}-${{ steps.cache_key.outputs.timestamp }}
+          restore-keys: |
+            openwrt-${{ matrix.arch }}-
+
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext \
-          git gnutls-dev libgcrypt20-dev libssl-dev python3-distutils rsync \
-          subversion swig time unzip wget zlib1g-dev
+          sudo apt-get install -y build-essential ccache gettext libncurses5-dev rsync unzip wget zlib1g-dev file p7zip-full
 
-      - name: Clone OpenWrt source
-        run: git clone https://github.com/openwrt/openwrt.git -b openwrt-21.02 --single-branch openwrt
+      - name: Create Directories
+        run: |
+          mkdir -p ${{ env.CACHE_DIR }}/{sdk,dl,feeds}
+          echo "CACHE_DIR_SDK=${{ env.CACHE_DIR }}/sdk" >> $GITHUB_ENV
+          echo "CACHE_DIR_DL=${{ env.CACHE_DIR }}/dl" >> $GITHUB_ENV
+          echo "CACHE_DIR_FEEDS=${{ env.CACHE_DIR }}/feeds" >> $GITHUB_ENV
+          echo "SDK_HOME=$(mktemp -d)" >> $GITHUB_ENV
 
-      - name: Update feeds
-        working-directory: ./openwrt
+      - name: Download and Unzip SDK
+        run: |
+          cd "$CACHE_DIR_SDK"
+          SDK_FILE_SHA_URL="$SDK_URL_PATH/sha256sums"
+          SDK_FILE_SHA_STR=$(wget -q -O - "$SDK_FILE_SHA_URL" | grep "${SDK_NAME}" | grep ".tar.xz")
+          if [ -z "$SDK_FILE_SHA_STR" ]; then
+            echo "::error::Cannot find SDK file in sha256sums."
+            exit 1
+          fi
+          SDK_FILE=$(echo "$SDK_FILE_SHA_STR" | awk '{print $2}' | sed 's/\*//')
+          SDK_SHA256=$(echo "$SDK_FILE_SHA_STR" | awk '{print $1}')
+          
+          echo "$SDK_SHA256  $SDK_FILE" > sha256sums.small
+          
+          if ! sha256sum -c sha256sums.small >/dev/null 2>&1; then
+            wget -q -O "$SDK_FILE" "$SDK_URL_PATH/$SDK_FILE"
+            if ! sha256sum -c sha256sums.small >/dev/null 2>&1; then
+              echo "::error::SDK can not be verified!"
+              exit 1
+            fi
+          fi
+          
+          cd -
+          file "$CACHE_DIR_SDK/$SDK_FILE"
+          7z x "$CACHE_DIR_SDK/$SDK_FILE" -so | tar -C "$SDK_HOME" -xvf - --strip-components=1
+          
+          cd "$SDK_HOME"
+          test -d "dl" && rm -rf "dl" || true
+          test -d "feeds" && rm -rf "feeds" || true
+          ln -s "$CACHE_DIR_DL" "dl"
+          ln -s "$CACHE_DIR_FEEDS" "feeds"
+          cp feeds.conf.default feeds.conf
+          sed -i 's#git.openwrt.org/openwrt/openwrt#github.com/openwrt/openwrt#' feeds.conf
+          sed -i 's#git.openwrt.org/feed/packages#github.com/openwrt/packages#' feeds.conf
+          sed -i 's#git.openwrt.org/project/luci#github.com/openwrt/luci#' feeds.conf
+          sed -i 's#git.openwrt.org/feed/telephony#github.com/openwrt/telephony#' feeds.conf
+          cd -
+
+      - name: Update and Install Packages
+        working-directory: ${{ env.SDK_HOME }}
         run: |
           ./scripts/feeds update -a
+          ln -s "${{ github.workspace }}" "./package/$PACKAGE_NAME"
           ./scripts/feeds install -a
 
-      - name: Copy package to feeds
-        run: cp -r ./luci-app-frps2 ./openwrt/package/feeds/luci/luci-app-frps2
-
-      - name: Configure build
-        working-directory: ./openwrt
+      - name: Build Package
+        working-directory: ${{ env.SDK_HOME }}
         run: |
           make defconfig
-          echo "CONFIG_PACKAGE_luci-app-frps2=y" >> .config
-          echo "CONFIG_PACKAGE_frps=y" >> .config
-          echo "CONFIG_PACKAGE_curl=y" >> .config
-          echo "CONFIG_PACKAGE_jsonfilter=y" >> .config
-          make defconfig
+          make package/${PACKAGE_NAME}/compile V=s
 
-      - name: Compile package
-        working-directory: ./openwrt
-        run: make package/luci-app-frps2/compile V=s
+      - name: Stage Artifacts
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts
+          find ${{ env.SDK_HOME }}/bin/packages -name "*.ipk" -exec cp {} ${{ github.workspace }}/artifacts/ \;
+          ls -R ${{ github.workspace }}/artifacts
 
-      - name: Upload IPK artifact
-        uses: actions/upload-artifact@v4
+      - name: Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: luci-app-frps2-ipk
-          path: openwrt/bin/packages/*/luci/luci-app-frps2_*.ipk
+          files: ${{ github.workspace }}/artifacts/*.ipk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
