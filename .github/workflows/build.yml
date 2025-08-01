@@ -1,0 +1,43 @@
+name: Build IPK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up OpenWrt build environment
+        uses: openwrt/setup-openwrt@v1
+        with:
+          openwrt-version: '21.02'
+
+      - name: Update feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Copy package to feeds
+        run: |
+          mkdir -p feeds/luci/applications/luci-app-frps2
+          cp -r ./* feeds/luci/applications/luci-app-frps2/
+
+      - name: Configure build
+        run: |
+          echo "CONFIG_PACKAGE_luci-app-frps2=y" >> .config
+          make defconfig
+
+      - name: Compile package
+        run: make package/luci-app-frps2/compile V=s
+
+      - name: Upload IPK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: luci-app-frps2-ipk
+          path: bin/packages/*/luci/luci-app-frps2_*.ipk

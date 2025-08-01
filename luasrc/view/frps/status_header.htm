@@ -3,27 +3,54 @@
  Licensed to the public under the MIT License.
 -%>
 
+<%--[[
+LuCI 视图 - frps 状态头部
+该文件在配置页面上创建一个小节，用于显示 frps 服务的运行状态。
+它使用嵌入式 JavaScript 定期轮询后端控制器动作以获取当前状态。
+--]]%>
+
 <%
+-- 这是一个服务器端的 Lua 代码块。
+-- 它导入了 'luci.dispatcher' 模块，该模块用于为状态轮询请求构建正确的 URL。
 local dsp = require "luci.dispatcher"
 -%>
 
+<!-- 这个 fieldset 在页面上创建了一个视觉上独立的区域。 -->
 <fieldset class="cbi-section">
+	<!-- 这个段落元素是显示状态的占位符。 -->
+	<!-- 它以默认的 "正在收集数据..." 消息开始。 -->
 	<p id="frps_status">
 		<em><%:Collecting data...%></em>
 	</p>
 </fieldset>
 
+<!-- 视图的主要 JavaScript 部分。 -->
 <script type="text/javascript">//<![CDATA[
+	// 使用 LuCI 内置的 XHR (XMLHttpRequest) 工具来轮询更新。
+	// XHR.poll(间隔, URL, 提交数据, 回调函数)
+	// 间隔: 5 - 每 5 秒轮询一次。
+	// URL: <%=dsp.build_url("admin/services/frps/status")%> - 这是一个服务器端的 Lua 表达式，在页面渲染时进行评估。
+	//   它会生成指向我们控制器中 'action_status' 函数的正确 URL。
+	// 提交数据: null - 我们不随请求发送任何数据，因此为 null。
+	// 回调函数: 接收到响应时执行的函数。
 	XHR.poll(5, '<%=dsp.build_url("admin/services/frps/status")%>', null,
 		function (x, data) {
+			// x: XHR 对象。
+			// data: 从服务器解析的 JSON 响应。
+
+			// 基本错误检查：如果 HTTP 状态不是 200 (OK) 或没有数据，则不执行任何操作。
 			if (x.status !== 200 || !data) {
 				return;
 			}
 
+			// 获取应显示状态的段落元素。
 			var frpsStatusElm = document.getElementById('frps_status');
+			// 根据 JSON 数据的 'running' 属性更新元素的内容。
+			// JSON 数据格式为 { "running": true } 或 { "running": false }。
+			// <%:Running%> 和 <%:Not Running%> 是翻译字符串的占位符。
 			frpsStatusElm.innerHTML = data.running
-				? '<%:Running%>'
-				: '<%:Not Running%>';
+				? '<strong><span style="color:green"><%:Running%></span></strong>'
+				: '<strong><span style="color:red"><%:Not Running%></span></strong>';
 		}
 	);
 //]]></script>

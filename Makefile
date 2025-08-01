@@ -5,7 +5,7 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=luci-app-frps
+PKG_NAME:=luci-app-frps2
 PKG_VERSION:=0.0.2
 PKG_RELEASE:=1
 
@@ -16,6 +16,7 @@ PKG_MAINTAINER:=lwz322 <lwz322@qq.com>
 
 LUCI_TITLE:=LuCI support for Frps
 LUCI_PKGARCH:=all
+LUCI_DEPENDS:=+frps +jsonfilter +curl
 
 define Package/$(PKG_NAME)/conffiles
 /etc/config/frps
