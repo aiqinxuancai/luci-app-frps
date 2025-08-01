@@ -21,12 +21,12 @@ jobs:
           - arch: x86_64
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/x86/64
             sdk_name: openwrt-sdk-23.05.5-x86-64
-          - arch: aarch64_cortex-a53
-            sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/aarch64/cortex-a53
-            sdk_name: openwrt-sdk-23.05.5-aarch64-cortex-a53
-          - arch: mipsel_24kc
-            sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7621
-            sdk_name: openwrt-sdk-23.05.5-ramips-mt7621
+          # - arch: aarch64_cortex-a53
+          #   sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/aarch64/cortex-a53
+          #   sdk_name: openwrt-sdk-23.05.5-aarch64-cortex-a53
+          # - arch: mipsel_24kc
+          #   sdk_url_path: https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7621
+          #   sdk_name: openwrt-sdk-23.05.5-ramips-mt7621
 
     env:
       SDK_URL_PATH: ${{ matrix.sdk_url_path }}
