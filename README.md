@@ -1,10 +1,10 @@
-# LuCI App for Frps (luci-app-frps)
+# LuCI App for Frps (luci-app-frps2)
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lwz322/luci-app-frps/blob/master/LICENSE)
 
 这是一个为 [frp](https://github.com/fatedier/frp) 服务端 (frps) 设计的 LuCI 应用，让您可以在 OpenWrt 的网页界面中轻松配置和管理 frps。
 
-本项目的设计灵感来源于 [kuoruan/luci-app-frpc](https://github.com/kuoruan/luci-app-frpc)，并已被 [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede) 项目收录。
+本项目的设计灵感来源于 [kuoruan/luci-app-frpc](https://github.com/kuoruan/luci-app-frpc)。
 
 ## ✨ 功能特性
 
@@ -16,7 +16,7 @@
 
 ## 🔧 安装
 
-1.  从 [Release 页面](https://github.com/lwz322/luci-app-frps/releases)下载最新的 `.ipk` 安装包。
+1.  从 [Release 页面](https://github.com/aiqinxuancai/luci-app-frps/releases)下载最新的 `.ipk` 安装包。
 2.  将安装包上传到您的 OpenWrt 路由器。
 3.  通过 `opkg` 命令安装软件包：
 
@@ -43,4 +43,4 @@
 
 ## 📄 开源许可
 
-本项目基于 [MIT License](https://github.com/lwz322/luci-app-frps/blob/master/LICENSE) 开源。
+本项目基于 [MIT License](https://github.com/aiqinxuancai/luci-app-frps/blob/master/LICENSE) 开源。
