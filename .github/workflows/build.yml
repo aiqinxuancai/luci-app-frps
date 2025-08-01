@@ -70,59 +70,52 @@ jobs:
         run: |
           cd "$CACHE_DIR_SDK"
           SDK_FILE_SHA_URL="$SDK_URL_PATH/sha256sums"
-
-          if ! wget -q -O sha256sums.full "$SDK_FILE_SHA_URL"; then
-            echo "::error::Failed to download sha256sums from $SDK_FILE_SHA_URL"
-            exit 1
-          fi
-
-          if ! grep "${SDK_NAME}" sha256sums.full | grep ".tar.xz" > sha256sums.small; then
-            echo "::error::Could not find SDK matching '${SDK_NAME}' in the sha256sums file."
-            echo "--- Full sha256sums content ---"
-            cat sha256sums.full
-            echo "-----------------------------"
-            exit 1
-          fi
           
+          # Fetch the sha256sums file and filter for the specific SDK tarball
+          if ! wget -q -O - "$SDK_FILE_SHA_URL" | grep "${SDK_NAME}" | grep ".tar.xz" > sha256sums.small; then
+            echo "::error::Failed to fetch or find SDK info in sha256sums."
+            exit 1
+          fi
           if [ ! -s sha256sums.small ]; then
-            echo "::error::Grep found a line, but the result was empty. This should not happen."
+            echo "::error::Cannot find SDK file for '${SDK_NAME}' in sha256sums."
             exit 1
           fi
 
+          # Extract filename and hash
           SDK_FILE=$(awk '{print $2}' sha256sums.small | sed 's/^\*//')
           SDK_SHA256=$(awk '{print $1}' sha256sums.small)
           
+          # Recreate the small sha file with the correct format
           echo "$SDK_SHA256  $SDK_FILE" > sha256sums.small
 
+          # Check if file exists and is valid, otherwise download
           if ! sha256sum -c sha256sums.small >/dev/null 2>&1; then
             wget -q -O "$SDK_FILE" "$SDK_URL_PATH/$SDK_FILE"
             if ! sha256sum -c sha256sums.small >/dev/null 2>&1; then
-              echo "::error::SDK could not be verified after download!"
+              echo "::error::SDK could not be verified!"
               exit 1
             fi
           fi
           
           cd -
+          echo "--- SDK file info ---"
+          file "$CACHE_DIR_SDK/$SDK_FILE"
+          echo "---------------------"
+
+          # Extract the SDK
           7z x "$CACHE_DIR_SDK/$SDK_FILE" -so | tar -C "$SDK_HOME" -xvf - --strip-components=1
           
+          # Setup SDK symlinks and feeds
           cd "$SDK_HOME"
           rm -rf dl feeds
           ln -s "$CACHE_DIR_DL" dl
           ln -s "$CACHE_DIR_FEEDS" feeds
           cp feeds.conf.default feeds.conf
-          sed -i 's#git.openwrt.org#github.com#g' feeds.conf
+          sed -i 's#git.openwrt.org/openwrt/openwrt#github.com/openwrt/openwrt#' feeds.conf
+          sed -i 's#git.openwrt.org/feed/packages#github.com/openwrt/packages#' feeds.conf
+          sed -i 's#git.openwrt.org/project/luci#github.com/openwrt/luci#' feeds.conf
+          sed -i 's#git.openwrt.org/feed/telephony#github.com/openwrt/telephony#' feeds.conf
           cd -
-
-      - name: Update Makefile Version from Tag
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          echo "Updating Makefile to version: $TAG_VERSION"
-          sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$TAG_VERSION/" Makefile
-          sed -i "s/PKG_RELEASE:=.*/PKG_RELEASE:=1/" Makefile
-          echo "--- Updated Makefile ---"
-          cat Makefile
-          echo "------------------------"
 
       - name: Update and Install Packages
         working-directory: ${{ env.SDK_HOME }}
